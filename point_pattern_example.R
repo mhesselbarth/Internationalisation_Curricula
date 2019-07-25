@@ -1,3 +1,4 @@
+library(helpeR)
 library(spatstat)
 library(tidyverse)
 
@@ -26,10 +27,10 @@ point_pattern_example <- ggplot(data = points_coords) +
   guides(col = FALSE) + 
   theme_void()
 
-# ggsave(filename = "point_pattern_example.png", 
-#        plot = point_pattern_example, 
-#        dpi = 300, 
-#        height = 2.5, width = 10, units = "cm")
+save_ggplot(filename = "Figures/point_pattern_example.png",
+            plot = point_pattern_example,
+            dpi = 300,
+            height = 2.5, width = 10, units = "cm")
 
 
 #### Example point pattern ####
@@ -61,10 +62,10 @@ point_pattern_size <- ggplot(data = points_coords) +
   coord_equal() + 
   theme_void()
 
-# ggsave(filename = "point_pattern_size.png", 
-#        plot = point_pattern_size, 
-#        dpi = 300, 
-#        height = 10, width = 10, units = "cm")
+save_ggplot(filename = "Figures/point_pattern_size.png",
+            plot = point_pattern_size,
+            dpi = 300,
+            height = 10, width = 10, units = "cm")
 
 #### Random point pattern ####
 set.seed(42)
@@ -90,10 +91,10 @@ point_pattern_random <- ggplot(data = points_coords) +
   coord_equal() + 
   theme_void()
 
-# ggsave(filename = "point_pattern_random.png",
-#        plot = point_pattern_random,
-#        dpi = 300,
-#        height = 10, width = 10, units = "cm")
+save_ggplot(filename = "Figures/point_pattern_random.png",
+            plot = point_pattern_random,
+            dpi = 300,
+            height = 10, width = 10, units = "cm")
 
 #### Clustered point pattern ####
 set.seed(42)
@@ -118,10 +119,10 @@ point_pattern_clustered <- ggplot(data = as.data.frame(points_cluster)) +
   coord_equal() + 
   theme_void()
 
-# ggsave(filename = "point_pattern_clustered.png",
-#        plot = point_pattern_clustered,
-#        dpi = 300,
-#        height = 10, width = 10, units = "cm")
+save_ggplot(filename = "Figures/point_pattern_clustered.png",
+            plot = point_pattern_clustered,
+            dpi = 300,
+            height = 10, width = 10, units = "cm")
 
 #### Regular point pattern ####
 set.seed(42)
@@ -146,7 +147,8 @@ point_pattern_regular <- ggplot(data = as.data.frame(points_regular)) +
   coord_equal() + 
   theme_void()
 
-# ggsave(filename = "point_pattern_regular.png",
-#        plot = point_pattern_regular,
-#        dpi = 300,
-#        height = 10, width = 10, units = "cm")
+save_ggplot(filename = "Figures/point_pattern_regular.png",
+            plot = point_pattern_regular,
+            dpi = 300,
+            height = 10, width = 10, units = "cm")
+     

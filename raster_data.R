@@ -1,8 +1,8 @@
+library(helpeR)
 library(NLMR)
 library(raster)
 library(shar)
 library(tidyverse)
-
 
 #### Continious data ####
 
@@ -19,10 +19,10 @@ plot_raster_cont <- ggplot(data = as.data.frame(raster_cont, xy = TRUE)) +
   coord_equal() + 
   theme_void()
 
-ggsave(filename = "plot_raster_cont.png", 
-       plot = plot_raster_cont, 
-       dpi = 300, 
-       height = 10, width = 10, units = "cm")
+save_ggplot(filename = "Figures/plot_raster_cont.png", 
+            plot = plot_raster_cont, 
+            dpi = 300, 
+            height = 10, width = 10, units = "cm")
 
 #### Discrete data ####
 
@@ -42,7 +42,7 @@ plot_raster_disc <- ggplot(data = raster_disc) +
   coord_equal() + 
   theme_void()
 
-ggsave(filename = "plot_raster_disc.png", 
-       plot = plot_raster_disc, 
-       dpi = 300, 
-       height = 10, width = 10, units = "cm")
+save_ggplot(filename = "Figures/plot_raster_disc.png", 
+            plot = plot_raster_disc, 
+            dpi = 300, 
+            height = 10, width = 10, units = "cm")
