@@ -1,2 +1,2 @@
 # Internationalisierung und Digitalisierung der Lehre
-Repository for the Internationalisierung der Lehre project
+Repository for the "Internationalisierung der Lehre" project
