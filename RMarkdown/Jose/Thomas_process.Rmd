@@ -1,0 +1,200 @@
+---
+title: "'Do frugivores spatially aggregate their feces and, if so, at what spatial scale?'"
+author: "Maximilian H.K. Hesselbarth"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    theme: cosmo
+    includes:
+      after_body: footer.html
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r global_options, include = FALSE}
+knitr::opts_chunk$set(message = FALSE, collapse = TRUE)
+```
+
+<center>
+```{r logo, echo = FALSE, out.width = "25%"}
+knitr::include_graphics("ecomod.png")
+```
+</center>
+
+### Introduction 
+Please be aware and acknowledge that the data and analysis was published in: Fedriani, J.M., Wiegand, T., 2014. Hierarchical mechanisms of spatially contagious seed dispersal in complex seed-disperser networks. Ecology 95, 514–526.
+
+For all further use of the data, a permission of the author must be obtained. We also ask you to not redistribute the data without asking for permission. For further questions about the data, please contact <fedriani@csic.es>!
+
+### Set-up
+First, we load the [`spatstat`](https://spatstat.org) library for spatial point pattern analysis (Baddeley and Turner, 2005). Also, we import the [`tidyverse`](https://www.tidyverse.org) library, a collection of `R` packages designed for data science (Wickham, 2017).
+
+```{r load_libs}
+# load packages
+library(spatstat)
+library(tidyverse)
+```
+
+If you don't have the packages installed yet, run the following code in order to install them. 
+
+```{r install_libs, eval = FALSE, include = TRUE}
+# install packages if not installed yed
+install.packages(c("spatstat", "tidyverse"))
+```
+
+Unfortunately, there is no nested cluster process (Wiegand et al., 2007) implemented in `spatstat`, yet. Therefore, we only fit a "simple" cluster process, namely the Thomas cluster process (Thomas, 1949).
+
+### Import the data
+To import the data, we use the `readr` package (Wickham et al., 2018), but you can use any other way you prefer to import the text file with the dataset as a `data.frame` (the columns are separated by a tab). By using `read_delim()`, the class of the imported data is automatically a `tibble`, an "advanced" version of a `data.frame`. For more information see `?tibble` from the `tibble` package (Müller and Wickham, 2019).
+
+```{r import_data}
+# import point pattern data
+feces_df <- read_delim(file = "Data/feces_dataset.txt",
+                        delim = "\t")
+```
+
+The datasets contains the coordinates of all feces and the species of the frugivores. For the later analysis, we split the dataset into two datasets: one containing feces of all animals (so basically the original dataset) and one without feces of badgers. Therefore, we filter the original dataset for all cases in which the `mark != "badger"` and save the results into a new `tibble`.
+
+```{r split_data}
+# only feces not belonging to badgers
+feces_df_wb <- filter(feces_df,
+                      mark != "badger")
+```
+
+Because we need to specify our study plot in which we want to conduct the spatial point pattern analysis, we need to import the corresponding coordinates as well.
+
+```{r import_plot_coords}
+# import plot coordinates
+plot_coords <- read_delim(file = "Data/plot_coords_a.txt",
+                          delim = "\t")
+```
+
+Now, we need to convert the `tibble` to the `ppp` class of the `spatstat` packages. `ppp` objects are characterized by the coordinates of all points, possibly marks and a observation window (i.e. the study plot). Therefore, we use the previously imported coordinates to create an `owin` (observation window) object first. Afterwards, we create the final `ppp` object using the `tibble` with all coordinates and marks as well as the `owin` object.
+
+```{r}
+# create owin
+obs_window <- owin(poly = list(x = plot_coords$x, y = plot_coords$y))
+
+# create ppp with badgers
+feces_ppp <- ppp(x = feces_df$x, y = feces_df$y,
+                 marks = feces_df$mark,
+                 window = obs_window)
+```
+
+It's always a good idea to plot the data to get a general idea about it. We can see that it seems like feces tend to be spatially clustered. Therefore, we simulate this using a cluster process as null model.
+
+```{r plot_ppp, fig.align = "center"}
+# plot ppp
+plot(feces_ppp)
+```
+
+### Fit and simulate the cluster process
+To fit a "simple" cluster process, and more specifically a Thomas process, to the data, `spatstat` provides the `kppm()` function. We use the pair-correlation function (Stoyan and Stoyan, 1994) and the minimum contrast method to fit the cluster process.
+
+```{r fit_cluster}
+# fit cluster process
+fitted_thomas <- kppm(X = unmark(feces_ppp),
+                      statistic = "pcf",
+                      statsargs = list(divisor = "d",
+                                       correction = "Ripley"),
+                      cluster = "Thomas", method = "mincon")
+```
+
+If we print the object, we get information about the model parameters (such as the intensity of cluster centers, the mean area of the clusters and the mean number of points within each cluster).
+
+```{r print_parameters}
+# print object for model parameters
+print(fitted_thomas)
+```
+
+We now use the fitted cluster process to simulate random patterns as null model patterns. Because we want to use 199 simulations to construct the simulation envelopes later on, we set `nsim = 199`. The returning object is a list with simulated patterns using the Thomas cluster process with the previously fitted parameters.
+
+```{r simulate_pattern}
+# set number of simulations
+nsim <- 199
+
+# simulate null model data
+simulated_thomas <- simulate.kppm(object = fitted_thomas,
+                                  nsim = nsim,
+                                  window = obs_window)
+```
+
+### Construct simulation envelopes
+To calculate the 5th highest and lowest values of the null model data, we use the `envelope()` function, which simply calculates the selected summary functions for all null model patterns provided and returns the specified highest and lowest values. `spatstat` provides the most commonly used summary functions, such as the pair-correlation function, the nearest-neighbor distribution function (Diggle, 2014) and the empty space function (Baddeley and Gill, 1994). 
+
+```{r calc_summary_fun}
+# envelopes pair-correlation fun
+envelope_pcf_thomas <- envelope(Y = unmark(feces_ppp),
+                                fun = pcf,
+                                nrank = 5,
+                                simulate = simulated_thomas,
+                                funargs = list(divisor = "d",
+                                               correction = "Ripley"),
+                                nsim = nsim)
+
+# envelopes nearest-neighbor distribution fun
+envelope_nnd_thomas <- envelope(Y = unmark(feces_ppp),
+                                fun = Gest,
+                                nrank = 5,
+                                simulate = simulated_thomas,
+                                funargs = list(correction = "km"),
+                                nsim = nsim,
+                                verbose = FALSE)
+
+# envelopes empty-space function
+envelope_epf_thomas <- envelope(Y = unmark(feces_ppp),
+                                fun = Fest,
+                                nrank = 5,
+                                simulate = simulated_thomas,
+                                funargs = list(correction = "km"),
+                                nsim = nsim,
+                                verbose = FALSE)
+```
+
+### Plot results
+To have a look a the results, we simply plot the envelope object, e.g. the pair-correlation function. We can see, at shorter distances r, the null model underestimates to clustering of the observed pattern because the point densities of the simulated patterns at distance r are smaller compared to the observed point pattern. The clustering is also even stronger than the Thomas cluster process can simulate.
+
+```{r plot_results, echo = FALSE, fig.align = "center"}
+plot(envelope_pcf_thomas)
+```
+
+For a more sophisticated plotting method, we could use the [`onpoint`](https://r-spatialecology.github.io/onpoint/) package (Hesselbarth, 2019). The package is not available on CRAN yet, but you can simply install it using `devtools::install_github("r-spatialecology/onpoint)`. For the nearest-neighbor distance distribution function, we can see that the null model actual overestimates the distance to the nearest neighbor, i.e. points are more isolated than simulated by the Thomas cluster process.
+
+```{r plot_quantums, fig.align = "center"}
+# load library
+library(onpoint)
+
+# plot nndf with quantums
+plot_quantums(envelope_nnd_thomas,
+              ylab = "D(r)")
+```
+
+### Conclusion
+The "simple" Thomas cluster process could not provide a satisfactory fit to the data. The clustering in the data was stronger than simulated by the null model. 
+
+As a next step, you could try to redo the analysis with dataset not including feces of badgers, as done in the original publication (Fedriani and Wiegand, 2014). 
+
+As already mentioned, currently we can't fit a nested cluster process to the data using `spatstat`. However, Fedriani and Wiegand (2014) showed that this null model provides a much better fit to the data.
+
+### References 
+Baddeley, A., Gill, R.D., 1994. The empty space hazard of a spatial pattern (No. 1994/3), Research Report. Department of Mathematics, University of Western Australia.
+
+Baddeley, A., Turner, R., 2005. spatstat: An R package for analyzing spatial point patterns. J. Stat. Softw. 12, 1–42.
+
+Diggle, P.J., 2014. Statistical analysis of spatial point patterns and spatio-temporal point patterns, 3. ed. Chapman and Hall/CRC Press, Boca Raton.
+
+Fedriani, J.M., Wiegand, T., 2014. Hierarchical mechanisms of spatially contagious seed dispersal in complex seed-disperser networks. Ecology 95, 514–526.
+
+Hesselbarth, M.H.K., 2019. onpoint: Helper functions for point pattern analysis. R package version 0.2.1.
+
+Müller, K., Wickham, H., 2019. tibble: Simple   Data Frames. R package version 2.1.3.
+
+Stoyan, D., Stoyan, H., 1994. Fractals, random shapes and point fields. John Wiley & Sons, Chichester.
+
+Thomas, M., 1949. A generalization of Poisson’s binomial limit for use in ecology. Biometrika 36, 18–25.
+
+Wickham, H., 2017. tidyverse: Easily Install and Load the “Tidyverse”. R package version 1.2.1.
+
+Wickham, H., Hester, J., Francois, R., 2018. readr: Read Rectangular Text Data. R package version 1.3.1.
+
+Wiegand, T., Savitri Gunatilleke, C.V., Nimal Gunatilleke, I.A.U., Okuda, T., 2007. Analyzing the spatial structure of a Sri Lankan tree species with multiple scales of clustering. Ecology 88, 3088–3102.

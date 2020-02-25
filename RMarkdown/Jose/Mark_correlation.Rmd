@@ -1,0 +1,155 @@
+---
+title: "'Is there any association among the number of seeds of different pairs of species?'"
+author: "Maximilian H.K. Hesselbarth"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    theme: cosmo
+    includes:
+      after_body: footer.html
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r global_options, include = FALSE}
+knitr::opts_chunk$set(message = FALSE, collapse = TRUE)
+```
+
+<center>
+```{r logo, echo = FALSE, out.width = "25%"}
+knitr::include_graphics("ecomod.png")
+```
+</center>
+
+### Introduction 
+Please be aware and acknowledge that the data and analysis was published in: Fedriani, J.M., Wiegand, T., 2014. Hierarchical mechanisms of spatially contagious seed dispersal in complex seed-disperser networks. Ecology 95, 514–526.
+
+For all further use of the data, a permission of the author must be obtained. We also ask you to not redistribute the data without asking for permission. For further questions about the data, please contact <fedriani@csic.es>!
+
+### Set-up
+As always, we need to load all libraries we need for the further analysis, i.e. [`spatstat`](https://spatstat.org) (Baddeley and Turner, 2005) and [`tidyverse`](https://www.tidyverse.org) (Wickham, 2017).
+
+```{r load_libs, message = FALSE}
+# load packages
+library(spatstat)
+library(tidyverse)
+```
+
+### Import the data
+Importing the data, we see that the marks are quantitative this time and actually two marks are present: The number of seeds of Pyrus bourgaeana (mark_1) and the number of seeds of Pistacia lentiscus (mark_2).
+
+```{r import_data}
+# import point pattern data
+feces_df <- read_delim(file = "Data/feces_dataset_quantitative.txt",
+                       delim = "\t")
+```
+
+We do not have the coordinates of the sample plot this time. Therefore, we use `ripras()` function, which automatically determines coordinates of a study plot including all coordinates. We use these coordinates to create the `owin` object.
+
+```{r create_ppp}
+# create observation window
+obs_window <- ripras(x = feces_df$x, 
+                     y = feces_df$y, shape = "rectangle")
+
+# create ppp
+feces_ppp <- ppp(x = feces_df$x, y = feces_df$y, 
+                 marks = data.frame(mark_1 = feces_df$mark_1,
+                                    mark_2 = feces_df$mark_2),
+                 window = obs_window)
+```
+
+To check everything, we plot the data. We see that this time `spatstat` automatically scales the size of the points according to the marks.
+
+```{r plot_ppp, echo = FALSE, fig.align = "center"}
+plot(feces_ppp)
+```
+
+### Random labeling
+Random labeling is also an appropriate null model for quantitative mark patterns (Goreaud and Pellissier, 2003). Again, we need to redistribute the marks while not changing the locations of the points. We use the returning list with randomized point patterns later as null model data.
+
+```{r random_labelling}
+# set number of randomizations
+nsim <- 199
+
+# randomly shuffle marks
+random_labeling_ppp <- rlabel(feces_ppp, nsim = nsim)
+```
+
+### Construct simulation envelopes
+We want to calculate the bivariate mark-correlation function. This function is called `markcrosscorr()` in `spatstat`. The function calculates the mark-correlation between all possible combinations of marks and returns an array. Because we are interested in the bivariate case, we only want to look at the second object of the array, i.e. kmm12(r). Unfortunately, the `envelope()` function can not deal with arrays. But this is not a problem: we simply build our own envelope function. 
+
+Therefore, we first calculate the bivariate mark-correlation function of the observed pattern. 
+
+```{r observed_data}
+# set distances r
+r <- seq(from = 0, to = 500, length.out = 513)
+
+# mark-correlation function kmm12(r)
+mccf_12 <- markcrosscorr(X = feces_ppp, 
+                         correction = "Ripley", 
+                         r = r)[[1]][[2]]
+```
+
+Now, we construct the envelopes. Therefore, we loop through the randomized null model data, calculate for each pattern the bivariate mark-correlation function and lastly get the 2.5% and 97.5% percentiles for each distance r.
+
+```{r construct_envelopes}
+# initialise list
+envelope_mccf_12 <- vector(length = nsim, mode = "list")
+
+# loop through null model data
+for (i in 1:nsim) {
+  # calculate kmm12(r)
+  result <- markcrosscorr(X = random_labeling_ppp[[i]], 
+                          correction = "Ripley", 
+                          r = r)
+  
+  # save result in list
+  envelope_mccf_12[[i]] <- as.data.frame(result$fns[[2]])
+}
+
+# combine list to one data frame
+envelope_mccf_12 <- bind_rows(envelope_mccf_12, .id = "nsim")
+  
+# group by distance r
+envelope_mccf_12 <- group_by(envelope_mccf_12, r)
+
+# get the threshold values for each distance r
+envelope_mccf_12 <- summarise(envelope_mccf_12, 
+                                lo = quantile(iso, 0.025), 
+                                hi = quantile(iso, 0.9725))
+
+# add theoretical value for CSR
+envelope_mccf_12$theo <- 1
+```
+
+### Plot results 
+As a last step, we simply plot the results using e.g. the `ggplot2` package (Wickham, 2016)
+
+```{r plot_results, fig.align = "center"}
+# load library
+library(ggplot2)
+
+# plot results
+ggplot(data = envelope_mccf_12) + 
+  geom_ribbon(aes(x = r, ymin = lo, ymax = hi), fill = "grey") + 
+  geom_line(aes(x = r, y = theo), col = "red", linetype = 2) + 
+  geom_line(data = mccf_12, aes(x = r, y = iso)) + 
+  scale_x_continuous(limits = c(0, max(r))) + 
+  labs(x = "r [m]", y = "kmm12(r)") +
+  theme_bw()
+```
+
+### Conclusions
+There is a strong positive correlation between the number of seeds of P. bourgaeana and P. lentiscus and a distance of about 400 m. This distance corresponds with the mean distance between badger latrines (Fedriani and Wiegand, 2014). Following, two feces separated by r = 400 are likely located in badger latrines and following both feces contain more seeds than feces do on average within the plot.
+
+### References
+Baddeley, A., Turner, R., 2005. spatstat: An R package for analyzing spatial point patterns. J. Stat. Softw. 12, 1–42.
+
+Fedriani, J.M., Wiegand, T., 2014. Hierarchical mechanisms of spatially contagious seed dispersal in complex seed-disperser networks. Ecology 95, 514–526.
+
+Goreaud, F., Pellissier, R., 2003. Avoiding misinterpretation of biotic interactions with the intertype K 12 -function: Population independence vs. random labelling hypotheses. J. Veg. Sci. 14, 681–692.
+
+Wickham, H., 2017. tidyverse: Easily Install and Load the “Tidyverse”. R package version 1.2.1.
+
+Wickham, H., 2016. ggplot2: Elegant graphics for data analysis. Springer, New York.
+

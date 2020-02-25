@@ -1,0 +1,166 @@
+---
+title: "'Do frugivore-delivered feces containing seeds aggregate within the overall pattern of all feces?'"
+author: "Maximilian H.K. Hesselbarth"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    theme: cosmo
+    includes:
+      after_body: footer.html
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r global_options, include = FALSE}
+knitr::opts_chunk$set(message = FALSE, collapse = TRUE)
+```
+
+<center>
+```{r logo, echo = FALSE, out.width = "25%"}
+knitr::include_graphics("ecomod.png")
+```
+</center>
+
+### Introduction 
+Please be aware and acknowledge that the data and analysis  was published in: Fedriani, J.M., Wiegand, T., 2014. Hierarchical mechanisms of spatially contagious seed dispersal in complex seed-disperser networks. Ecology 95, 514–526.
+
+For all further use of the data, a permission of the author must be obtained. We also ask you to not redistribute the data without asking for permission. For further questions about the data, please contact <fedriani@csic.es>!
+
+### Set-up
+Just as before, we need to load the [`spatstat`](https://spatstat.org) library for spatial point pattern analysis (Baddeley and Turner, 2005), as well as the [`tidyverse`](https://www.tidyverse.org) library for general data manipulation (Wickham, 2017).
+
+```{r load_libs}
+# load packages
+library(spatstat)
+library(tidyverse)
+```
+
+### Import the data
+Now, we import the data, including the coordinates, the qualitative marks as well as the study plot coordinates. The marks give information if a feece contains seeds or not. For an easier handling of the data later on, we combine the information about the qualitative mark into one column. Feces with seeds have the mark = 1, while feces without seed have the mark = 2.
+
+```{r import_data}
+# import point pattern data
+feces_df <- read_delim(file = "Data/feces_dataset_qualitative.txt",
+                       delim = "\t")
+
+# import coordinates of study plot
+plot_coords <- read_delim(file = "Data/plot_coords_b.txt", 
+                          delim = "\t")
+
+# combine marks into one col
+feces_df <- mutate(feces_df, 
+                   mark = as.factor(case_when(mark_1 == 1 & mark_2 == 0 ~ 1, 
+                                              mark_1 == 0 & mark_2 == 1 ~ 2)))
+```
+
+As the last step, we specify the `owin` object and use all data to finally create the `ppp` object for the later analysis.
+
+```{r create_ppp}
+# create observation window
+obs_window <- owin(poly = list(x = plot_coords$x, y = plot_coords$y))
+
+# create ppp
+feces_ppp <- ppp(x = feces_df$x, y = feces_df$y, marks = feces_df$mark,
+                 window = obs_window)
+```
+
+To check everything, we plot the data. We can see that `spatstat` automatically uses the qualitative marks for plotting. 
+
+```{r plot_ppp, echo = FALSE, fig.align = "center"}
+plot(feces_ppp)
+```
+
+### Random labeling
+One appropriate null model for qualitative marked patterns is random labeling (Goreaud and Pellissier, 2003). The null model includes a random redistribution of all marks while not changing the locations of the points. For this, `spatstat` provides the `rlabel()` function and we simply need to specify the number of randomized patterns. The result is a list with randomized patterns. If we plot the observed pattern and compare it to a randomized pattern, we can see how the marks changed, but not the location of the points.
+
+```{r random_labelling}
+# set number of null model data
+nsim <- 199
+
+# randomly shuffle marks
+random_labeling_ppp <- rlabel(feces_ppp, nsim = nsim)
+```
+
+```{r plot_rlabel, echo = FALSE, fig.align = "center"}
+par(mfrow = c(1, 2))
+plot(feces_ppp)
+plot(random_labeling_ppp[[1]], legend = FALSE)
+par(mfrow = c(1, 1))
+```
+
+### Construct envelopes mark connection
+Using the `envelope()` function and the simulated null model data, we can construct the simulation envelopes for the mark-connection function. The mark-connection function describes the probability that two points separated by distance r belong to the type i and j (Stoyan and Stoyan, 1994).
+
+```{r construct_envelopes}
+# mark-connection for feces with seeds
+envelope_random_labeling_11 <- envelope(Y = feces_ppp, fun = markconnect, 
+                                        nsim = nsim, nrank = 5,
+                                        funargs = list(i = 1, j = 1, 
+                                                       correction = "Ripley"), 
+                                        simulate = random_labeling_ppp)
+
+# mark-connection for feces with and w/o seeds
+envelope_random_labeling_12 <- envelope(Y = feces_ppp, fun = markconnect, 
+                                        nsim = nsim, nrank = 5,
+                                        funargs = list(i = 1, j = 2, 
+                                                       correction = "Ripley"), 
+                                        simulate = random_labeling_ppp)
+```
+
+Looking at the results, we see that at shorter distances feces containing seeds are strongly aggregated, whereas the probability of finding one feece with and one without seeds is smaller then estimated by the null model of random labeling. This means that feces with and without seeds are rather segregated at short distances.
+
+```{r plot_envelope_12, echo = FALSE, fig.align = "center", fig.height = 10}
+par(mfrow = c(2, 1))
+plot(envelope_random_labeling_11)
+plot(envelope_random_labeling_12, legend = FALSE)
+par(mfrow = c(1, 1))
+```
+
+The difference between the density of all feces to feces with seeds and all feces to feces without seeds shows if feces with seeds tend to be located in areas with a overall high density of feces (Fedriani and Wiegand, 2014; Jacquemyn et al., 2010). To test this, we use the null model of random labeling again But this time, we calculate the bivariate cross pair-correlation function, and more specify `pcfdot()`. This summary function gives the density of all type of points at distance r from points of type i. Once we calculated the two needed summary functions, we use `eval.fv()` to calculate the difference between them.
+
+```{r difference_density, warning = FALSE}
+# density from feces with seeds to all feces
+envelope_pcf_1_dot <- envelope(Y = feces_ppp, fun = pcfdot, 
+                               nsim = nsim, nrank = 5, 
+                               funargs = list(i = 1, 
+                                              correction = "Ripley", 
+                                              divisor = "d"), 
+                               simulate = random_labeling_ppp)
+
+# density from feces w/o seeds to all feces
+envelope_pcf_2_dot <- envelope(Y = feces_ppp, fun = pcfdot, 
+                               nsim = nsim, nrank = 5, 
+                               funargs = list(i = 2, 
+                                              correction = "Ripley", 
+                                              divisor = "d"), 
+                               simulate = random_labeling_ppp)
+
+envelope_pcf_diff <- eval.fv(envelope_pcf_1_dot - envelope_pcf_2_dot)
+```
+
+Looking at the results, we see that feces with seeds tend to be in areas with a overall high density of feces. 
+
+```{r plot_difference_density, fig.align = "center"}
+# load library
+library(onpoint) # devtools::install_github("r-spatialecology/onpoint")
+
+# plot difference between pcfs with quantums
+plot_quantums(envelope_pcf_diff)
+```
+
+### Conclusion
+We showed that feces containing seeds are clustered, even when we account for the general clustered pattern of feces overall.
+
+### References
+Baddeley, A., Turner, R., 2005. spatstat: An R package for analyzing spatial point patterns. J. Stat. Softw. 12, 1–42.
+
+Fedriani, J.M., Wiegand, T., 2014. Hierarchical mechanisms of spatially contagious seed dispersal in complex seed-disperser networks. Ecology 95, 514–526.
+
+Goreaud, F., Pellissier, R., 2003. Avoiding misinterpretation of biotic interactions with the intertype K 12 -function: Population independence vs. random labelling hypotheses. J. Veg. Sci. 14, 681–692.
+
+Jacquemyn, H., Endels, P., Honnay, O., Wiegand, T., 2010. Evaluating management interventions in small populations of a perennial herb Primula vulgaris using spatio-temporal analyses of point patterns. J. Appl. Ecol. 47, 431–440.
+
+Stoyan, D., Stoyan, H., 1994. Fractals, random shapes and point fields. John Wiley & Sons, Chichester.
+
+Wickham, H., 2017. tidyverse: Easily Install and Load the “Tidyverse”. R package version 1.2.1.
+

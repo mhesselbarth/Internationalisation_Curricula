@@ -1,3 +1,11 @@
+###################################################
+##    Author: Maximilian H.K. Hesselbarth        ##
+##    Department of Ecosystem Modelling          ##
+##    University of Goettingen                   ##
+##    maximilian.hesselbarth@uni-goettingen.de   ##
+##    www.github.com/mhesselbarth                ##
+###################################################
+
 #### Load libraries ####
 library(onpoint)
 library(patchwork)
@@ -5,14 +13,14 @@ library(spatstat)
 library(tidyverse)
 
 #### Import data ####
-feeces_df <- read_delim(file = "data_Fedriani_Wiegand_2014/feeces_dataset_bivariate.txt",
+feeces_df <- read_delim(file = "Data/Jose/feces_dataset_qualitative.txt",
                         delim = "\t")
 
 feeces_df <- mutate(feeces_df, 
                     mark = as.factor(case_when(mark_1 == 1 & mark_2 == 0 ~ 1, 
                                                mark_1 == 0 & mark_2 == 1 ~ 2)))
 
-plot_coords <- read_delim(file = "data_Fedriani_Wiegand_2014/plot_coords_b.txt", 
+plot_coords <- read_delim(file = "Data/Jose/plot_coords_b.txt", 
                           delim = "\t")
 
 obs_window <- owin(poly = list(x = plot_coords$x, y = plot_coords$y))

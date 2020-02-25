@@ -1,3 +1,11 @@
+###################################################
+##    Author: Maximilian H.K. Hesselbarth        ##
+##    Department of Ecosystem Modelling          ##
+##    University of Goettingen                   ##
+##    maximilian.hesselbarth@uni-goettingen.de   ##
+##    www.github.com/mhesselbarth                ##
+###################################################
+
 #### Load libraries ####
 
 library(onpoint)
@@ -6,16 +14,16 @@ library(spatstat)
 library(tidyverse)
 
 #### Import data ####
-feeces_df <- read_delim(file = "data_Fedriani_Wiegand_2014/feeces_dataset.txt",
+feeces_df <- read_delim(file = "Data/Jose/feces_dataset.txt",
                         delim = "\t")
 
 feeces_df_wb <- filter(feeces_df, 
                        mark != "badger")
 
-plot_coords_b <- read_delim(file = "data_Fedriani_Wiegand_2014/plot_coords_a.txt", 
+plot_coords_a <- read_delim(file = "Data/Jose/plot_coords_a.txt", 
                             delim = "\t")
 
-obs_window <- owin(poly = list(x = plot_coords_b$x, y = plot_coords_b$y))
+obs_window <- owin(poly = list(x = plot_coords_a$x, y = plot_coords_a$y))
 
 feeces_ppp <- ppp(x = feeces_df$x, y = feeces_df$y, marks = feeces_df$mark,
                  window = obs_window)
