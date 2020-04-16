@@ -32,26 +32,26 @@ mounds_old_94 <- dplyr::filter(data_94, Type == "Old")
 # n_grid <- spatstat::ripras(x = stakes$X, y = stakes$Y, shape = "rectangle")
 study_plot <- spatstat:::owin(xrange = c(0, 80), yrange = c(0, 80))
 
-# create ppp old mounds
-mounds_old_94_ppp <- spatstat::ppp(x = mounds_old_94$X, y = mounds_old_94$Y, 
-                                window = study_plot)
-
-# add data as mark
-spatstat::marks(mounds_old_94_ppp) <- mounds_old_94$Date[spatstat::inside.owin(x = mounds_old_94$X, 
-                                                                            y = mounds_old_94$Y, 
-                                                                            w = study_plot)]
+# # create ppp old mounds
+# mounds_old_94_ppp <- spatstat::ppp(x = mounds_old_94$X, y = mounds_old_94$Y, 
+#                                    window = study_plot)
+# 
+# # add data as mark
+# spatstat::marks(mounds_old_94_ppp) <- mounds_old_94$Date[spatstat::inside.owin(x = mounds_old_94$X, 
+#                                                                                y = mounds_old_94$Y, 
+#                                                                                w = study_plot)]
 
 # create ppp new mounds
 mounds_new_94_ppp <- spatstat::ppp(x = mounds_new_94$X, y = mounds_new_94$Y, 
-                                window = study_plot)
+                                   window = study_plot)
 
 # add data as mark
 spatstat::marks(mounds_new_94_ppp) <- mounds_new_94$Date[spatstat::inside.owin(x = mounds_new_94$X, 
                                                                             y = mounds_new_94$Y, 
                                                                             w = study_plot)]
 
-# create ppp total mounds
-mounds_total_94_ppp <- spatstat::superimpose(mounds_old_94_ppp, mounds_new_94_ppp)
+# # create ppp total mounds
+# mounds_total_94_ppp <- spatstat::superimpose(mounds_old_94_ppp, mounds_new_94_ppp)
 
 # plot mounds
 mounds_new_94_gg <- ggplot(data = tibble::as_tibble(mounds_new_94_ppp)) + 
@@ -88,7 +88,7 @@ spatstat::marks(mounds_new_95_ppp) <- mounds_new_95$Date[spatstat::inside.owin(x
                                                                                w = study_plot)]
 
 # plot mounds
-mounds_total_95_gg <- ggplot(data = tibble::as_tibble(mounds_new_95_ppp)) + 
+mounds_new_95_gg <- ggplot(data = tibble::as_tibble(mounds_new_95_ppp)) + 
   geom_point(aes(x = x, y = y)) + 
   geom_polygon(data = as_tibble(study_plot), aes(x = x, y = y), size = 1,
                fill = NA, col = "black") +
@@ -98,10 +98,10 @@ mounds_total_95_gg <- ggplot(data = tibble::as_tibble(mounds_new_95_ppp)) +
   theme(panel.grid.major = element_line(colour = "grey"), 
         panel.grid.minor = element_line(colour = "grey"))
 
-mounds_total_gg <- mounds_new_94_gg + mounds_total_95_gg
+mounds_total_gg <- mounds_new_94_gg + mounds_new_95_gg
 
 #### Intensity over time ####
-mounds_total_94_95_ppp <- spatstat::superimpose(mounds_new_94_ppp, mounds_new_95_ppp)
+mounds_new_94_95_ppp <- spatstat::superimpose(mounds_new_94_ppp, mounds_new_95_ppp)
 
 grid_plot <- matrix(data = 0, nrow = 80, ncol = 80) %>% 
   raster::raster(xmn = 0, xmx = 80, 
@@ -121,8 +121,8 @@ production_rate <- purrr::map_dbl(1:nrow(grid_plot_df), function(i) {
                                           grid_plot_df[i, 2] + sqrt(5))) 
   
   # T/F for points inside
-  points_inside_temp <- spatstat::inside.owin(x = mounds_total_94_95_ppp$x, 
-                                              y = mounds_total_94_95_ppp$y, 
+  points_inside_temp <- spatstat::inside.owin(x = mounds_new_94_95_ppp$x, 
+                                              y = mounds_new_94_95_ppp$y, 
                                               w = owin_temp)
   
   # count number of trues divided by sample area and time

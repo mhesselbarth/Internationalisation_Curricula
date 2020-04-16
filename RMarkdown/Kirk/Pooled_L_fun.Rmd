@@ -1,0 +1,287 @@
+---
+title: "'How does the pattern of disturbance accumulate over time?'"
+author: "Maximilian H.K. Hesselbarth"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    theme: cosmo
+    includes:
+      after_body: footer.html
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r global_options, include = FALSE}
+knitr::opts_chunk$set(message = FALSE, collapse = TRUE)
+```
+
+<center>
+
+```{r logo, echo = FALSE, out.width = "25%"}
+knitr::include_graphics("ecomod.png")
+```
+</center>
+
+### Introduction
+Please be aware and acknowledge that the data was published in: Klaas, B.A., Moloney, K.A., Danielson, B.J., 2000. The tempo and mode of gopher mound production in a tallgrass prairie remnant. Ecography 23, 246–256.
+
+For all further use of the data, a permission of the author must be obtained.
+We also ask you to not redistribute the data without asking for permission. For
+further questions about the data, please contact <kmoloney@iastate.edu>!
+
+### Set-up
+First, we load the [`spatstat`](https://spatstat.org) library for spatial point pattern analysis (Baddeley and Turner, 2005). Also, we import the [`tidyverse`](https://www.tidyverse.org) library, a collection of `R` packages designed for data science (Wickham, 2017). To reproduce the analysis we also need to load the [`raster`](https://cran.r-project.org/package=raster) (Hijmans, 2019) package and for an easy layout of result plots, the [`patchwork`](https://patchwork.data-imaginist.com) (Pedersen, 2019) package.
+
+```{r load_libs}
+# load packages
+library(spatstat)
+library(tidyverse)
+library(raster)
+library(patchwork)
+```
+
+If you don't have the packages installed yet, run the following code in order to install them. 
+
+```{r install_libs, eval = FALSE, include = TRUE}
+# install packages if not installed yed
+install.packages(c("spatstat", "tidyverse", "raster", "patchwork"))
+```
+
+Throughout this tutorial, I'm going to use the pipe-operator `%>%`. This allows to redirect (or pipe) the result of a function call directly into the next function. The big advantage of this is that subsequent functions must not be nested and code is much easier to read. 
+
+```{r}
+# create 100 random numbers
+x <- runif(n = 100)
+
+# calculate the mean of the quantiles
+mean(quantile(x))
+
+# same, but much easier to read
+x %>%  
+  quantile() %>% 
+  mean()
+```
+
+### Import the data
+We use the [`readr`](https://readr.tidyverse.org/index.html) (Wickham et al., 2018) package to import the data because it will automatically be imported as a [`tibble`](https://tibble.tidyverse.org/index.html) (Müller and Wickham, 2019; an advanced `data.frame`). For more information see `?tibble`. But, of course you can use any way of importing the data you prefer. The deliminator of the data is a comma. The data is seperated into two files for the years 1994 and 1995.
+
+The data includes a coloumn with the date of sampling as well as a coloumn which identifies the type of the point ("Elevation", "New", "Old", "Stake", "Trap") We transform the date coloumn `as.Date` and order the data by `Type` and `Date` in the same pipe.
+
+```{r}
+data_94 <- readr::read_delim("Data/Mounds_94.csv", 
+                             delim  = ",", col_names = TRUE) %>% 
+  dplyr::mutate(Date = as.Date(Date, format = "%m/%d/%y")) %>% 
+  dplyr::arrange(Type, Date)
+
+data_95 <- readr::read_delim("Data/Mounds_95.csv", 
+                             delim  = ",", col_names = TRUE) %>% 
+  dplyr::mutate(Date = as.Date(Date, format = "%m/%d/%y")) %>% 
+  dplyr::arrange(Type, Date)
+
+data_94
+```
+
+To check the different types of points, we can use the `table()` function. Because we are only interested in the new mounds, we filter the data accordingly and save the result as a subset of the data.
+
+```{r}
+# check different data types
+table(data_94$Type, useNA = "ifany")
+table(data_95$Type, useNA = "ifany")
+
+# filter new mounds
+mounds_new_94 <- dplyr::filter(data_94, Type == "New")
+mounds_new_95 <- dplyr::filter(data_95, Type == "New")
+```
+
+Firstly, we simply visualize the two point patterns of the north grid in 1994 and 1995. For this, we use the [`ggplot2`](https://ggplot2.tidyverse.org) (Wickham, 2016) package. But again, you can also use `base plot` to plot the coordinates if you prefer. To also plot the study plot (or observation window), we create a `tibble` with the coordinates of the corner points in counter-clockwise order 
+
+```{r}
+# coordinates of study plot
+study_plot <- tibble::tibble(x = c(0, 80, 80, 0), y = c(0, 0, 80, 80))
+```
+
+Next, we can build both plots and combine them into on plot using `patchwork`.
+
+```{r, fig.align = "center"}
+# create plot 1994
+mounds_new_94_gg <- ggplot(data = mounds_new_94) + 
+  geom_point(aes(x = X, y = Y)) + 
+  geom_polygon(data = study_plot, aes(x = x, y = y), size = 1,
+               fill = NA, col = "black") +
+  coord_equal() + 
+  labs(x = "", y = "", title = "N Grid 1994") +
+  theme_minimal() +
+  theme(panel.grid.major = element_line(colour = "grey"), 
+        panel.grid.minor = element_line(colour = "grey"))
+
+# create plot 1995
+mounds_new_95_gg <- ggplot(data = mounds_new_95) + 
+  geom_point(aes(x = X, y = Y)) + 
+   geom_polygon(data = study_plot, aes(x = x, y = y), size = 1,
+               fill = NA, col = "black") +
+  coord_equal() + 
+  labs(x = "", y = "", title = "N Grid 1995") +
+  theme_minimal() +
+  theme(panel.grid.major = element_line(colour = "grey"), 
+        panel.grid.minor = element_line(colour = "grey"))
+
+# combine to one plot
+mounds_new_94_gg + mounds_new_95_gg
+```
+
+### Intensity over time
+Next, we can calculate the intensity over time. For this, we firstly convert to the `tibble` to a `ppp`-object (point pattern in 2-D plane) of the `spatstat` package. To specify the study plot (called "observation window" in `spatstat`), we can use the previously created `tibble` with the corner coordinates
+
+```{r}
+# create owin object for study plot
+study_plot <- spatstat::owin(poly = study_plot)
+
+# create ppp new mounds
+mounds_new_94_ppp <- spatstat::ppp(x = mounds_new_94$X, y = mounds_new_94$Y, 
+                                   window = study_plot)
+
+mounds_new_95_ppp <- spatstat::ppp(x = mounds_new_95$X, y = mounds_new_95$Y, 
+                                   window = study_plot)
+```
+
+A few points are located slightly outside the defined study plot (probably due to some minor inaccurcies during the sampling). `spatstat` automatically rejects these points and we need to remove those points when we want to add the date as marks to the point pattern (additional characteristics of the points). For this, the `inside.owin()` function can be used.
+
+```{r}
+# add marks to points but subsetting points outside study plot
+spatstat::marks(mounds_new_94_ppp) <- mounds_new_94$Date[spatstat::inside.owin(x = mounds_new_94$X, 
+                                                                               y = mounds_new_94$Y, 
+                                                                               w = study_plot)]
+
+spatstat::marks(mounds_new_95_ppp) <- mounds_new_95$Date[spatstat::inside.owin(x = mounds_new_95$X, 
+                                                                               y = mounds_new_95$Y, 
+                                                                               w = study_plot)]
+```
+
+As a last step, we superimpose the point pattern of 1994 and 1995 to have one final point pattern. 
+
+```{r}
+mounds_new_94_95_ppp <- spatstat::superimpose(mounds_new_94_ppp, mounds_new_95_ppp)
+```
+
+Now, we can use the moving window approach to calculate the intensity/rate per area and time. Therefore, we create a raster grid to later store the rate of production. 
+
+```{r}
+grid_plot <- matrix(data = 0, nrow = 80, ncol = 80) %>% 
+  raster::raster(xmn = 0, xmx = 80, 
+                 ymn = 0, ymx = 80, 
+                 crs = NA)
+```
+
+To acutally count the number of mounds within each grid cell, we convert this `raster` to a `tibble` again to loop through all rows and by that through each raster cell. Within the loop, we create a small `owin` object with the size of 20 $m^{2}$ using the cell centre as the centre of the `owin`. We then count the number of mounds within the window using `inside.owin()` and divide the count by the amount of time and the area. 
+
+```{r}
+# convert to dataframe
+grid_plot_df <- raster::as.data.frame(grid_plot, xy = TRUE) %>% 
+  tibble::as.tibble()
+
+# init vector to store results
+production_rate <- vector(mode = "numeric", length = nrow(grid_plot_df))
+
+# count mounds in 20qm area
+for (i in 1:nrow(grid_plot_df)) {
+  
+  # create owin with 20qm around cell center
+  owin_temp <-  spatstat::owin(xrange = c(grid_plot_df[[i, 1]] - sqrt(5), 
+                                          grid_plot_df[[i, 1]] + sqrt(5)), 
+                               yrange = c(grid_plot_df[[i, 2]] - sqrt(5), 
+                                          grid_plot_df[[i, 2]] + sqrt(5))) 
+  
+  # T/F for points inside
+  points_inside_temp <- spatstat::inside.owin(x = mounds_new_94_95_ppp$x, 
+                                              y = mounds_new_94_95_ppp$y, 
+                                              w = owin_temp)
+  
+  # count number of trues divided by sample area and time
+  production_rate[i] <- sum(points_inside_temp) / 20 / 2
+}
+```
+
+Lastly, we can add the calculated production rate to the `raster` and/or the `tibble` and plot the result using either `ggplot2` or the `raster` plotting function
+
+```{r, fig.align = "center"}
+# add value to df
+grid_plot_df$layer <- production_rate
+
+# add value to raster
+raster::values(grid_plot) <- production_rate
+
+# plot result
+ggplot(data = grid_plot_df) + 
+  geom_raster(aes(x = x, y = y, fill = layer)) + 
+  scale_fill_viridis_c(option = "C", 
+                       name = expression(paste("Mounds ", m^{-2}, yr^{-1}))) + 
+  coord_equal() + 
+  labs(x = "", y = "", title = "N Grid 1994 - 1995") +
+  theme_minimal() +
+  theme(panel.grid.major = element_line(colour = "grey"), 
+        panel.grid.minor = element_line(colour = "grey"))
+```
+
+### Pooled L-function
+To analyse the L-function for the pooled data set (both years combined), we firstly clip the study plot by removing the area that was flooded. Because we don't know the exact locations of this area, we have to estimated it by try-and-error.
+
+```{r}
+# new observation window w/o area with no mounds
+study_plot_clipped <- tibble::tibble(x = c(0, 78, 76, 57, 34, 10, 0),
+                                     y = c(0, 0 , 17, 67, 77, 80, 80))
+
+# replace window
+mounds_new_94_95_ppp$window <-  spatstat::owin(poly = study_plot_clipped)
+```
+
+In the original publication, the center L-function was used. However, in `spatstat` only the "normal" L-function is available. Thus, we need to center it ourselves. The `eval.fv()` functions allows to evaluate any expression involving the result of a summary function in `spatstat` (`fv` object). Alternativly, you could also use the `center_l_function()` function from the [`onpoint`](https://r-spatialecology.github.io/onpoint/) (Hesselbarth, 2019)
+
+```{r}
+l_center <- function(x, ...) {
+
+  # calculate L function
+  x <- spatstat::Lest(x, ...)
+
+  # get r value
+  r <- x$r
+
+  # center L-function by r value
+  l_centered <- spatstat::eval.fv(x - r)
+
+  return(l_centered)
+}
+```
+
+To calculate the 5th highest and lowest values of the null model data and the observed function value, we use the `envelope()` function. If we do not specify a specifc null model, complete spatial randomness (CSR) is simulated automatically. 
+
+```{r, fig.align = "center"}
+# calculate CSR envelopes
+envelopes_l_fun <- spatstat::envelope(Y = mounds_new_94_95_ppp, 
+                                      fun = l_center, 
+                                      funargs = list(r = seq(from  = 0, to = 35, length.out = 525), 
+                                                     correction = "Ripley"), 
+                                      nsim = 199, nrank = 5,
+                                      verbose = FALSE)
+
+# plot results
+plot(envelopes_l_fun, xlim = c(0, 35), ylim = c(-3, 7), main = "")
+```
+
+### References 
+Baddeley, A., Turner, R., 2005. spatstat: An R package for analyzing spatial point patterns. J. Stat. Softw. 12, 1–42.
+
+Hesselbarth, M.H.K., 2019. onpoint: Helper functions for point pattern analysis. R package version 0.2.1.
+
+Hijmans, R.J., 2019. raster: Geographic data analysis and modeling. R package version 2.9-5. https://cran.r-project.org/package=raster.
+
+Klaas, B.A., Moloney, K.A., Danielson, B.J., 2000. The tempo and mode of gopher mound production in a tallgrass prairie remnant. Ecography 23, 246–256.
+
+Müller, K., Wickham, H., 2019. tibble: Simple   Data Frames. R package version 2.1.3.
+
+Pedersen, T., 2019. patchwork: The Composer of Plots. R package version 1.0.0. https://CRAN.R-project.org/package=patchwork.
+
+Wickham, H., 2017. tidyverse: Easily Install and Load the “Tidyverse”. R package version 1.2.1.
+
+Wickham, H., 2016. ggplot2: Elegant graphics for data analysis. Springer, New York.
+
+Wickham, H., Hester, J., Francois, R., 2018. readr: Read Rectangular Text Data. R package version 1.3.1.
