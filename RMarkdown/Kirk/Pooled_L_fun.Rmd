@@ -30,7 +30,7 @@ We also ask you to not redistribute the data without asking for permission. For
 further questions about the data, please contact <kmoloney@iastate.edu>!
 
 ### Set-up
-First, we load the [`spatstat`](https://spatstat.org) library for spatial point pattern analysis (Baddeley and Turner, 2005). Also, we import the [`tidyverse`](https://www.tidyverse.org) library, a collection of `R` packages designed for data science (Wickham, 2017). To reproduce the analysis we also need to load the [`raster`](https://cran.r-project.org/package=raster) (Hijmans, 2019) package and for an easy layout of result plots, the [`patchwork`](https://patchwork.data-imaginist.com) (Pedersen, 2019) package.
+First, we load the [`spatstat`](https://spatstat.org) library for spatial point pattern analysis (Baddeley and Turner, 2005). Also, we import the [`tidyverse`](https://www.tidyverse.org) library, a collection of `R` packages designed for data science (Wickham, 2017). To reproduce the analysis we also need to load the [`raster`](https://cran.r-project.org/package=raster) package (Hijmans, 2019) and for an easy arrangment of multiple result plots the [`patchwork`](https://patchwork.data-imaginist.com) package (Pedersen, 2019).
 
 ```{r load_libs}
 # load packages
@@ -54,18 +54,19 @@ Throughout this tutorial, I'm going to use the pipe-operator `%>%`. This allows 
 x <- runif(n = 100)
 
 # calculate the mean of the quantiles
-mean(quantile(x))
+round(mean(quantile(x)), digits = 2)
 
 # same, but much easier to read
 x %>%  
   quantile() %>% 
-  mean()
+  mean() %>% 
+  round(digits = 2)
 ```
 
 ### Import the data
-We use the [`readr`](https://readr.tidyverse.org/index.html) (Wickham et al., 2018) package to import the data because it will automatically be imported as a [`tibble`](https://tibble.tidyverse.org/index.html) (Müller and Wickham, 2019; an advanced `data.frame`). For more information see `?tibble`. But, of course you can use any way of importing the data you prefer. The deliminator of the data is a comma. The data is seperated into two files for the years 1994 and 1995.
+We use the [`readr`](https://readr.tidyverse.org/index.html) package (Wickham et al., 2018) to import the data to automatically imported is as a [`tibble`](https://tibble.tidyverse.org/index.html) (an advanced `data.frame`; (Müller and Wickham, 2019). For more information see `?tibble`. But, of course you can use any way of importing the data you prefer. The deliminator of the data is a comma. The data is seperated into two .csv-files for the years 1994 and 1995.
 
-The data includes a coloumn with the date of sampling as well as a coloumn which identifies the type of the point ("Elevation", "New", "Old", "Stake", "Trap") We transform the date coloumn `as.Date` and order the data by `Type` and `Date` in the same pipe.
+The data includes a coloumn with the date of sampling as well as a coloumn which identifies the type of the points ("Elevation", "New", "Old", "Stake", "Trap"). Afer importing the data, we transform the date coloumn `as.Date` and order the data by `Type` and `Date` in the same pipe.
 
 ```{r}
 data_94 <- readr::read_delim("Data/Mounds_94.csv", 
@@ -93,14 +94,14 @@ mounds_new_94 <- dplyr::filter(data_94, Type == "New")
 mounds_new_95 <- dplyr::filter(data_95, Type == "New")
 ```
 
-Firstly, we simply visualize the two point patterns of the north grid in 1994 and 1995. For this, we use the [`ggplot2`](https://ggplot2.tidyverse.org) (Wickham, 2016) package. But again, you can also use `base plot` to plot the coordinates if you prefer. To also plot the study plot (or observation window), we create a `tibble` with the coordinates of the corner points in counter-clockwise order 
+Firstly, we simply visualize the two point patterns of the north grid in 1994 and 1995. For this, we use the [`ggplot2`](https://ggplot2.tidyverse.org) package (Wickham, 2016). But again, if you prefer you can also use the `base plotting system` to plot the locations of mounds. To also visualize the study plot (also called observation window), we create a `tibble` with the coordinates of the corner points in counter-clockwise order 
 
 ```{r}
 # coordinates of study plot
 study_plot <- tibble::tibble(x = c(0, 80, 80, 0), y = c(0, 0, 80, 80))
 ```
 
-Next, we can build both plots and combine them into on plot using `patchwork`.
+Next, we can create both ``ggplot`s and combine them into on arrangement using `patchwork`.
 
 ```{r, fig.align = "center"}
 # create plot 1994
@@ -130,7 +131,7 @@ mounds_new_94_gg + mounds_new_95_gg
 ```
 
 ### Intensity over time
-Next, we can calculate the intensity over time. For this, we firstly convert to the `tibble` to a `ppp`-object (point pattern in 2-D plane) of the `spatstat` package. To specify the study plot (called "observation window" in `spatstat`), we can use the previously created `tibble` with the corner coordinates
+Next, we can calculate the intensity over time. For this, we firstly convert to the `tibble` to a `ppp`-object (point pattern in 2-D plane) of the `spatstat` package. To specify the study plot (called "observation window" in `spatstat`), we can use the previously created `tibble` with the corner coordinates.
 
 ```{r}
 # create owin object for study plot
@@ -144,7 +145,7 @@ mounds_new_95_ppp <- spatstat::ppp(x = mounds_new_95$X, y = mounds_new_95$Y,
                                    window = study_plot)
 ```
 
-A few points are located slightly outside the defined study plot (probably due to some minor inaccurcies during the sampling). `spatstat` automatically rejects these points and we need to remove those points when we want to add the date as marks to the point pattern (additional characteristics of the points). For this, the `inside.owin()` function can be used.
+A few points are located slightly outside the defined study plot (probably due to some minor inaccurcies during the sampling). `spatstat` automatically rejects these points and we need to remove those points when we want to add the date as marks to the point pattern (additional characteristics of the points). For this, the `inside.owin()` function can be used to subset the data.
 
 ```{r}
 # add marks to points but subsetting points outside study plot
@@ -157,13 +158,13 @@ spatstat::marks(mounds_new_95_ppp) <- mounds_new_95$Date[spatstat::inside.owin(x
                                                                                w = study_plot)]
 ```
 
-As a last step, we superimpose the point pattern of 1994 and 1995 to have one final point pattern. 
+As a last step, we `superimpose()` the point pattern of 1994 and 1995 to have one final point pattern. 
 
 ```{r}
 mounds_new_94_95_ppp <- spatstat::superimpose(mounds_new_94_ppp, mounds_new_95_ppp)
 ```
 
-Now, we can use the moving window approach to calculate the intensity/rate per area and time. Therefore, we create a raster grid to later store the rate of production. 
+Now, we can use the moving window approach to calculate the production rate of mounds per area and time. Therefore, we create a raster grid to later store the rate of production. 
 
 ```{r}
 grid_plot <- matrix(data = 0, nrow = 80, ncol = 80) %>% 
@@ -172,12 +173,12 @@ grid_plot <- matrix(data = 0, nrow = 80, ncol = 80) %>%
                  crs = NA)
 ```
 
-To acutally count the number of mounds within each grid cell, we convert this `raster` to a `tibble` again to loop through all rows and by that through each raster cell. Within the loop, we create a small `owin` object with the size of 20 $m^{2}$ using the cell centre as the centre of the `owin`. We then count the number of mounds within the window using `inside.owin()` and divide the count by the amount of time and the area. 
+To acutally count the number of mounds within each grid cell, we convert this `raster` to a `tibble` to loop through all rows and by that through each raster cell. Within the loop, we create a small `owin` object with the size of 20 $m^{2}$ using the cell centre as the centre of the `owin`. We then count the number of mounds within the small observation window using `inside.owin()` and divide the count by the amount of time and the area. 
 
 ```{r}
 # convert to dataframe
 grid_plot_df <- raster::as.data.frame(grid_plot, xy = TRUE) %>% 
-  tibble::as.tibble()
+  tibble::as_tibble()
 
 # init vector to store results
 production_rate <- vector(mode = "numeric", length = nrow(grid_plot_df))
@@ -223,18 +224,24 @@ ggplot(data = grid_plot_df) +
 ```
 
 ### Pooled L-function
-To analyse the L-function for the pooled data set (both years combined), we firstly clip the study plot by removing the area that was flooded. Because we don't know the exact locations of this area, we have to estimated it by try-and-error.
+To analyse the L-function for the pooled data set (both years combined), we firstly clip the study plot by removing the area that was flooded previously to the field season of sampling. Because we don't know the exact locations of this area, we have to estimated it by try-and-error.
 
-```{r}
+```{r, fig.align = "center"}
 # new observation window w/o area with no mounds
 study_plot_clipped <- tibble::tibble(x = c(0, 78, 76, 57, 34, 10, 0),
                                      y = c(0, 0 , 17, 67, 77, 80, 80))
 
 # replace window
 mounds_new_94_95_ppp$window <-  spatstat::owin(poly = study_plot_clipped)
+
+# plot point pattern
+plot(mounds_new_94_95_ppp, use.marks = FALSE)
+
+# add old observation window
+plot(study_plot, add = TRUE, lty = 2)
 ```
 
-In the original publication, the center L-function was used. However, in `spatstat` only the "normal" L-function is available. Thus, we need to center it ourselves. The `eval.fv()` functions allows to evaluate any expression involving the result of a summary function in `spatstat` (`fv` object). Alternativly, you could also use the `center_l_function()` function from the [`onpoint`](https://r-spatialecology.github.io/onpoint/) (Hesselbarth, 2019)
+In the original publication, the centered L-function was used. However, in `spatstat` only the "normal" L-function (Besag 1977) is available. Thus, we need to center it ourselves. The `eval.fv()` functions allows to evaluate any expression involving the result of a previously calculated summary function in `spatstat` (`fv` object). Alternativly, you could also use the `center_l_function()` function from the [`onpoint`](https://r-spatialecology.github.io/onpoint/) package (Hesselbarth, 2019).
 
 ```{r}
 l_center <- function(x, ...) {
@@ -252,7 +259,7 @@ l_center <- function(x, ...) {
 }
 ```
 
-To calculate the 5th highest and lowest values of the null model data and the observed function value, we use the `envelope()` function. If we do not specify a specifc null model, complete spatial randomness (CSR) is simulated automatically. 
+To calculate the 5th highest and lowest values of the null model data (simulation envelope) and the observed function value, we use the `envelope()` function. If we do not specify a certain null model, complete spatial randomness (CSR) is simulated automatically. The `envelope()` function also allows to specify some more arguments such as the `correction` or the scales `r`. When plotting the results, we need to use the same limits of the x- and y-axis as in the original publication. 
 
 ```{r, fig.align = "center"}
 # calculate CSR envelopes
@@ -269,6 +276,8 @@ plot(envelopes_l_fun, xlim = c(0, 35), ylim = c(-3, 7), main = "")
 
 ### References 
 Baddeley, A., Turner, R., 2005. spatstat: An R package for analyzing spatial point patterns. J. Stat. Softw. 12, 1–42.
+
+Besag, J.E., 1977. Discussion on Dr. Ripley’s paper. J. R. Stat. Soc. Ser. B Methodol. 39, 193–195.
 
 Hesselbarth, M.H.K., 2019. onpoint: Helper functions for point pattern analysis. R package version 0.2.1.
 
